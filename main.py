@@ -209,7 +209,7 @@ async def scrape_pcworld_news():
     return JSONResponse(content=all_articles)
 
 @app.post("/upload-image/")
-async def upload_image(file: UploadFile = File(...), secret_key: bool = Depends(validate_secret_key)):
+async def upload_image(file: UploadFile = File(...)):
     try:
         image_url = upload_image_to_backblaze(file)
         return {"image_url": image_url}
