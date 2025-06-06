@@ -164,7 +164,7 @@ async def scrape_pcworld_news():
 
 @app.get("/scrape-all-news/")
 async def scrape_all_news():
-    combined_articles = scrape_pcworld() + fetch_rss_articles()
+    combined_articles =  fetch_rss_articles() + scrape_pcworld()
     return JSONResponse(content=combined_articles)
 
 @app.post("/upload-image/")
