@@ -1,0 +1,68 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCWorld News</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .article {
+            background: white;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .article img {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+        .article h2 {
+            margin: 0 0 10px;
+        }
+        .article p {
+            margin: 0;
+        }
+        .article a {
+            text-decoration: none;
+            color: #007bff;
+        }
+        .article a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Latest PCWorld News</h1>
+
+    {% for article in articles %}
+        <div class="article">
+            <h2><a href="{{ article.link }}" target="_blank">{{ article.title }}</a></h2>
+            {% if article.image_url %}
+                <img src="{{ article.image_url }}" alt="Article Image">
+            {% endif %}
+            <p>{{ article.excerpt }}</p>
+            {% if article.author %}
+                <p><strong>{{ article.author }}</strong></p>
+            {% endif %}
+            <p>{{ article.published }}</p>
+        </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>
+

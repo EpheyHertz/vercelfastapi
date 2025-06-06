@@ -1,11 +1,14 @@
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header,Request
 import requests
 from decouple import config
-from helper import upload_image_to_backblaze
+from helper import upload_image_to_backblaze, scrape_pcworld, fetch_rss_articles
 from bs4 import BeautifulSoup
+import feedparser
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 SECRET_KEY = config('SECRET_KEY')
 app = FastAPI()
 
@@ -151,62 +154,18 @@ async def scrape_pcworld_windows():
 
 
 
+
+# ---------- Endpoints ----------
+
 @app.get("/scrape-pcworld-news/")
 async def scrape_pcworld_news():
-    # Base URL of the page to scrape
-    base_url = "https://www.pcworld.com/news/page/{}"
+    pcworld_articles = scrape_pcworld()
+    return JSONResponse(content=pcworld_articles)
 
-    # Initialize a list to store all articles across pages
-    all_articles = []
-
-    # Loop through the first three pages
-    for page in range(1, 9):  # Pages 1 to 3
-        # Format the URL for each page
-        url = base_url.format(page)
-
-        
-        response = requests.get(url)
-        response.raise_for_status()  # ensure we got a successful response
-
-        # Parse the HTML content
-        soup = BeautifulSoup(response.text, 'lxml')
-
-        # Find the section containing the articles
-        articles_section = soup.find("div", class_="articleFeed-inner")
-
-        # Ensure the section was found
-        if articles_section:
-            # Loop through each article on the current page
-            for article in articles_section.find_all("article", class_="item"):
-                # Extract title
-                title = article.find("h3").get_text(strip=True) if article.find("h3") else None
-
-                # Extract URL
-                link = article.find("a", href=True)["href"] if article.find("a", href=True) else None
-
-                # Extract image URL (optional)
-                image = article.find("img")["src"] if article.find("img") else None
-
-                # Extract excerpt
-                excerpt = article.find("span", class_="item-excerpt").get_text(strip=True) if article.find("span", class_="item-excerpt") else None
-
-                # Extract author and date (within the item-meta div)
-                meta = article.find("div", class_="item-meta")
-                author = meta.find("span", class_="item-byline").get_text(strip=True) if meta and meta.find("span", class_="item-byline") else None
-                date = meta.find("span", class_="item-date").get_text(strip=True) if meta and meta.find("span", class_="item-date") else None
-
-                # Add the article data to the list
-                all_articles.append({
-                    "title": title,
-                    "link": link,
-                    "image": image,
-                    "excerpt": excerpt,
-                    "author": author,
-                    "date": date,
-                })
-
-    # Return all collected articles as a JSON response
-    return JSONResponse(content=all_articles)
+@app.get("/scrape-all-news/")
+async def scrape_all_news():
+    combined_articles = scrape_pcworld() + fetch_rss_articles()
+    return JSONResponse(content=combined_articles)
 
 @app.post("/upload-image/")
 async def upload_image(file: UploadFile = File(...)):
@@ -215,3 +174,17 @@ async def upload_image(file: UploadFile = File(...)):
         return {"image_url": image_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+
+# Tell FastAPI where your templates are located
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/news", response_class=HTMLResponse)
+async def news_page(request: Request):
+    articles = fetch_rss_articles()+ scrape_pcworld()
+    return templates.TemplateResponse("news.html", {
+        "request": request,
+        "articles": articles
+    })
