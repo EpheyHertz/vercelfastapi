@@ -2,15 +2,20 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header,Request
 import requests
 from decouple import config
-from helper import upload_image_to_backblaze, scrape_pcworld, fetch_rss_articles
+from .helper import upload_image_to_backblaze, scrape_pcworld, fetch_rss_articles
 from bs4 import BeautifulSoup
 import feedparser
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from .routers.news_scheduler import router as news_router, lifespan
+
 SECRET_KEY = config('SECRET_KEY')
-app = FastAPI()
+
+app = FastAPI(lifespan=lifespan)
+# from .routers.news_scheduler import setup_scheduler
+# setup_scheduler(app)
 
 # Add CORS middleware to allow all origins
 app.add_middleware(
@@ -35,7 +40,7 @@ def read_root():
 
 
 
-
+app.include_router(news_router, prefix="/news-workflows", tags=["News Automation"])
 
 
 @app.get("/scrape-newsarticles/")

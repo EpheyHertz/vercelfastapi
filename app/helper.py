@@ -1,11 +1,16 @@
 import os
+import re
 import tempfile
 from fastapi import  File, UploadFile, HTTPException
 from decouple import config
 from b2sdk.v2 import B2Api, InMemoryAccountInfo
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 import feedparser
 import requests
+from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
+from dateutil.parser import parse
 
 
 SECRET_KEY = config('SECRET_KEY')
@@ -13,6 +18,46 @@ BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
 AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME')
+def convert_relative_time_to_date(relative_time):
+    """Convert relative time strings to UTC datetime objects"""
+    try:
+        # Try parsing absolute dates first
+        parsed_date = parse(relative_time)
+        if parsed_date.tzinfo is None:
+            parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+        else:
+            parsed_date = parsed_date.astimezone(timezone.utc)
+        return parsed_date
+    except (ValueError, OverflowError):
+        pass  # Continue to relative time parsing
+    
+    # Handle relative time patterns
+    match = re.match(
+        r'(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago', 
+        relative_time.lower().strip()
+    )
+    if not match:
+        return None
+
+    value = int(match.group(1))
+    unit = match.group(2)
+
+    unit_conversion = {
+        'second': 'seconds',
+        'minute': 'minutes',
+        'hour': 'hours',
+        'day': 'days',
+        'week': 'weeks',
+        'month': 'months',
+        'year': 'years'
+    }
+
+    try:
+        now = datetime.now(timezone.utc)
+        kwargs = {unit_conversion[unit]: value}
+        return now - relativedelta(**kwargs)
+    except KeyError:
+        return None
 
 def upload_image_to_backblaze(file: UploadFile, bucket_name: str = BUCKET_NAME):
     # Validate the file
@@ -76,10 +121,10 @@ def scrape_pcworld():
                 "source": "PCWorld",
                 "title": title,
                 "link": link,
-                "image_url": image,
+                "image": image,
                 "excerpt": excerpt,
                 "author": author,
-                "published": date,
+                "date": date,
             })
     return all_articles
 
@@ -87,39 +132,58 @@ def scrape_pcworld():
 RSS_FEEDS = {
     "TechCrunch": "https://techcrunch.com/feed/",
     "Ars Technica": "https://feeds.arstechnica.com/arstechnica/index",
-    "Reuters": "http://feeds.reuters.com/reuters/topNews",
-    "Hacker News": "https://hnrss.org/newest",
+    "The Verge": "https://www.theverge.com/rss/index.xml",
     "Dev.to": "https://dev.to/feed"
 }
+
 
 def extract_image(entry):
     """
     Extracts image URL from an RSS entry using common methods:
-    media_content, enclosures, or first <img> tag in summary.
+    media_content, enclosures, or first <img> tag in summary or content.
     """
     # Check for media content
     media = entry.get('media_content')
-    if media and isinstance(media, list) and media[0].get('url'):
-        return media[0]['url']
+    if isinstance(media, list):
+        for item in media:
+            url = item.get('url')
+            if url:
+                return url
 
-    # Check for enclosure
+    # Check for enclosures
     enclosures = entry.get('enclosures')
-    if enclosures and isinstance(enclosures, list) and enclosures[0].get('url'):
-        return enclosures[0]['url']
+    if isinstance(enclosures, list):
+        for enclosure in enclosures:
+            url = enclosure.get('url')
+            if url:
+                return url
 
     # Fallback: find image in HTML summary
     summary = entry.get('summary', '')
-    soup = BeautifulSoup(summary, 'html.parser')
-    img_tag = soup.find('img')
-    from bs4.element import Tag
-    if isinstance(img_tag, Tag):
-        src = img_tag.get('src')
-        if src:
-            return src
+    if summary:
+        soup = BeautifulSoup(summary, 'html.parser')
+        img_tag = soup.find('img')
+        if isinstance(img_tag, Tag):
+            src = img_tag.get('src')
+            if src:
+                return src
+
+    # Additional fallback: check 'content' field if available
+    content = entry.get('content')
+    if isinstance(content, list):
+        for item in content:
+            value = item.get('value', '')
+            if value:
+                soup = BeautifulSoup(value, 'html.parser')
+                img_tag = soup.find('img')
+                if isinstance(img_tag, Tag):
+                    src = img_tag.get('src')
+                    if src:
+                        return src
 
     return None
 
-def clean_excerpt(html, limit=300):
+def clean_excerpt(html, limit=500):
     """
     Converts HTML summary to plain text and trims it to a set length.
     """
@@ -142,11 +206,13 @@ def fetch_rss_articles():
                 "source": source_name,
                 "title": entry.get("title", "No Title"),
                 "link": entry.get("link"),
-                "image_url": extract_image(entry),
+                "image": extract_image(entry),
                 "excerpt": clean_excerpt(entry.get("summary", "")),
                 "author": entry.get("author", None),
-                "published": entry.get("published", "")
+                "date": entry.get("published", "")
             }
             articles.append(article)
+            # print("Article", article)
+    # print("Total articles fetched:", len(articles))
 
     return articles
