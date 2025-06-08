@@ -11,15 +11,13 @@ class NewsSource(Base):
     source_id = Column(String(255), nullable=True)
     name = Column(String(255), nullable=False)
 
-    articles = relationship("NewsArticle", back_populates="source")
-
 
 
 class NewsArticle(Base):
     __tablename__ = 'aipc_diagnosis_newsarticle'  # Django's actual table name
 
     id = Column(Integer, primary_key=True, index=True)
-    source_id = Column(Integer, ForeignKey("aipc_diagnosis_newssource.id", ondelete="CASCADE"), nullable=True)
+    source = Column(String(255), nullable=True)
     author = Column(String(255), nullable=True)
     title = Column(String(500), unique=True, nullable=False, default='No title')
     description = Column(Text, nullable=True)
@@ -28,5 +26,5 @@ class NewsArticle(Base):
     published_at = Column(DateTime, nullable=False)
     content = Column(Text, nullable=True)
 
-    source = relationship("NewsSource", back_populates="articles")
+
 
