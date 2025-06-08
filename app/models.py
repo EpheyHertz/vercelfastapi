@@ -5,20 +5,21 @@ from datetime import datetime
  # assuming Base is declared in database.py
 
 class NewsSource(Base):
-    __tablename__ = 'aipc_diagnosis_newssource'  # Django's actual table name
+    __tablename__ = 'aipc_diagnosis_newssource'  # matches Django db_table
 
-    id = Column(Integer, primary_key=True, index=True)  # This is Django's implicit ID field
-    source_id = Column(String(255), nullable=True)      # Match Django CharField (not PK here)
+    id = Column(Integer, primary_key=True, index=True)  # Django auto PK
+    source_id = Column(String(255), nullable=True)
     name = Column(String(255), nullable=False)
 
     articles = relationship("NewsArticle", back_populates="source")
+
 
 
 class NewsArticle(Base):
     __tablename__ = 'aipc_diagnosis_newsarticle'  # Django's actual table name
 
     id = Column(Integer, primary_key=True, index=True)
-    source = Column(Integer, ForeignKey("aipc_diagnosis_newssource.id", ondelete="CASCADE"), nullable=False)
+    source_id = Column(Integer, ForeignKey("aipc_diagnosis_newssource.id", ondelete="CASCADE"), nullable=True)
     author = Column(String(255), nullable=True)
     title = Column(String(500), unique=True, nullable=False, default='No title')
     description = Column(Text, nullable=True)
