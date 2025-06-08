@@ -187,7 +187,7 @@ async def process_single_article(db:Session, article: dict) -> bool:
     
     # Create article
     new_article = NewsArticle(
-        source=source_name,
+        source=article.get("source", 'Unknown'),
         author=article.get("author"),
         title=article["title"],
         description=article.get("excerpt"),
