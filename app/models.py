@@ -18,7 +18,7 @@ class NewsArticle(Base):
     __tablename__ = 'aipc_diagnosis_newsarticle'  # Django's actual table name
 
     id = Column(Integer, primary_key=True, index=True)
-    source_id = Column(Integer, ForeignKey("aipc_diagnosis_newssource.id", ondelete="CASCADE"), nullable=False, default=1)
+    source = Column(Integer, ForeignKey("aipc_diagnosis_newssource.id", ondelete="CASCADE"), nullable=False)
     author = Column(String(255), nullable=True)
     title = Column(String(500), unique=True, nullable=False, default='No title')
     description = Column(Text, nullable=True)
