@@ -153,50 +153,42 @@ async def fetch_and_store_news(db: Session) -> dict:
         "timestamp": datetime.now().isoformat()
     }
 
-async def process_single_article(db:Session, article: dict) -> bool:
+async def process_single_article(db: Session, article: dict) -> bool:
     """Process and save a single article with proper validation"""
     # Validate required fields
     if not article.get("title") or not article.get("link"):
         logger.warning("Skipping article missing title or URL")
         return False
-    
+
     # Check for existing article
     existing = db.execute(
         select(NewsArticle).where(NewsArticle.title == article["title"])
     )
     if existing.scalar_one_or_none():
-        return False  # Already exists
-    
-    # Handle source
+        return False 
+
+   
     source_name = article.get("source", "Unknown")
-    source =  db.execute(
-        select(NewsSource).where(NewsSource.name == source_name)
-    )
-    source = source.scalar_one_or_none()
-    
-    if not source:
-        source = NewsSource(name=source_name)
-        db.add(source)
-        db.commit()
-        db.refresh(source)
-    
+    print("Source:", source_name)
+
     # Parse date
     published_at = None
     if article.get("date"):
         published_at = convert_relative_time_to_date(article["date"])
-    
-    # Create article
+
+    # Create and add article
     new_article = NewsArticle(
-        source=article.get("source", 'Unknown'),
+        source=source_name,
         author=article.get("author"),
         title=article["title"],
-        description=article.get("excerpt"),
+        description=article.get("excerpt") or article.get("description"),
         url=article["link"],
         image_url=article.get("image"),
         published_at=published_at or datetime.now(),
         content=article.get("content", "")
     )
-    
+
+    print("New article:", new_article.source, new_article.title)
     db.add(new_article)
     return True
 
