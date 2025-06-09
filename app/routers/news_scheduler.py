@@ -127,13 +127,18 @@ async def fetch_and_store_news(db: Session) -> dict:
 
     for article in all_articles:
         try:
-            # Check for duplicate by title before saving
+            link = article.get("link")
+            if not link:
+                logger.warning("Skipping article with missing URL: %s", article)
+                continue
+
+            # Check for duplicate by URL
             existing_article = db.execute(
-                select(NewsArticle).where(NewsArticle.title == article["title"])
+                select(NewsArticle).where(NewsArticle.url == link)
             ).scalar_one_or_none()
 
             if existing_article:
-                logger.info(f"Duplicate found, skipping: {article['title']}")
+                logger.info("Duplicate found by URL, skipping: %s", link)
                 continue
 
             saved = await process_single_article(db, article)
@@ -142,10 +147,10 @@ async def fetch_and_store_news(db: Session) -> dict:
 
         except IntegrityError as ie:
             db.rollback()
-            logger.warning(f"IntegrityError (possibly duplicate): {article['title']} — {ie}")
+            logger.warning(f"IntegrityError (possibly duplicate): {article.get('link')} — {ie}")
         except Exception as e:
             db.rollback()
-            logger.error(f"Failed to process article '{article.get('title')}': {str(e)}")
+            logger.error(f"Failed to process article '{article.get('link')}': {str(e)}")
 
     db.commit()
 
@@ -155,42 +160,42 @@ async def fetch_and_store_news(db: Session) -> dict:
         "timestamp": datetime.now().isoformat()
     }
 
+
 async def process_single_article(db: Session, article: dict) -> bool:
     """Process and save a single article with proper validation"""
-    # Validate required fields
-    if not article.get("title") or not article.get("link"):
-        logger.warning("Skipping article missing title or URL")
+    link = article.get("link")
+    title = article.get("title")
+
+    if not link or not title:
+        logger.warning("Skipping article missing link or title")
         return False
 
-    # Check for existing article
+    # Double-check for duplicate by URL
     existing = db.execute(
-        select(NewsArticle).where(NewsArticle.title == article["title"])
-    )
-    if existing.scalar_one_or_none():
-        return False 
+        select(NewsArticle).where(NewsArticle.url == link)
+    ).scalar_one_or_none()
+    if existing:
+        return False
 
-   
     source_name = article.get("source", "Unknown")
-    print("Source:", source_name)
 
-    # Parse date
+    # Parse published date if available
     published_at = None
     if article.get("date"):
         published_at = convert_relative_time_to_date(article["date"])
 
-    # Create and add article
+    # Create and add new article
     new_article = NewsArticle(
         source=source_name,
         author=article.get("author"),
-        title=article["title"],
+        title=title,
         description=article.get("excerpt") or article.get("description"),
-        url=article["link"],
+        url=link,
         image_url=article.get("image"),
         published_at=published_at or datetime.now(),
         content=article.get("content", "")
     )
 
-    print("New article:", new_article.source, new_article.title)
     db.add(new_article)
     return True
 

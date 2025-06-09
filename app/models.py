@@ -19,7 +19,7 @@ class NewsArticle(Base):
     id = Column(Integer, primary_key=True, index=True)
     source = Column(String(255), nullable=True)
     author = Column(String(255), nullable=True)
-    title = Column(String(500), unique=True, nullable=False, default='No title')
+    title = Column(String(500), nullable=False, default='No title')
     description = Column(Text, nullable=True)
     url = Column(String(1000), nullable=False)
     image_url = Column(String(1000), nullable=True)
