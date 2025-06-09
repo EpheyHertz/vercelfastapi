@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException,BackgroundTasks
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
-from ..database.database import get_db
+from ..database.database import get_db,SessionLocal
 from ..models import NewsSource, NewsArticle
 from contextlib import asynccontextmanager
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +13,8 @@ import logging
 from ..helper import scrape_pcworld, fetch_rss_articles, convert_relative_time_to_date
 import re
 from typing import Optional
+import logging
+import asyncio
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -219,26 +221,30 @@ async def get_news_stats():
 #     logger.info("Scheduler setup completed for the application")
 #     return app
 
+
+
+
+
+def run_scraping_task(clean_first: bool, days_to_keep: int = 7):
+    """Run scraping logic synchronously within a background task"""
+    try:
+        with SessionLocal() as db:
+            if clean_first:
+                clean_old_articles(db, days=days_to_keep)
+            asyncio.run(fetch_and_store_news(db))
+            logger.info("Scraping completed successfully")
+    except Exception as e:
+        logger.error(f"Background scraping failed: {str(e)}", exc_info=True)
+
 @router.post("/trigger-scraping")
 async def trigger_scraping(
+    background_tasks: BackgroundTasks,
     clean_first: bool = True,
-    days_to_keep: Optional[int] = 7,
-    db: Session = Depends(get_db)
+    days_to_keep: Optional[int] = 7
 ):
-    """Manually trigger the news scraping job"""
-    try:
-        start_time = datetime.now()
-        
-        if clean_first:
-             clean_old_articles(db, days=days_to_keep)
-        
-        result = await fetch_and_store_news(db)
-        
-        return {
-            "status": "success",
-            "time_elapsed": str(datetime.now() - start_time),
-            "result": result
-        }
-    except Exception as e:
-        logger.error("Manual scraping failed: %s", str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    """Trigger news scraping in the background (non-blocking)"""
+    background_tasks.add_task(run_scraping_task, clean_first, days_to_keep)
+    return {
+        "status": "started",
+        "message": "Scraping is running in the background. Check logs or DB for updates."
+    }
